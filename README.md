@@ -67,6 +67,8 @@ If we give `s = 0` to the expression `new(big.Int).ModInverse(&s, n)` We will ge
 
 If we try to give `s < 0` or `s > n` to the expression, we will get the same values as if `s` was in range.
 
+So even though no checks on `r` nor `s` were performed - the verification code seems valid. :(
+
 ### Leaking the key
 After understanding the ECDSA bypass will not work and validating the rest of the implementation follows the Wikipedia instructions (like checking that k is generated from a secure random at signing), we went to another part of the program that seems suspicious. We noticed from the beginning that no one validates that the given point is on the curve - there is a function `pointt.go:IsOnCurve` that is never called. But in the ECDSA validation there was nothing to do with that (the point must be the server public key).
 
