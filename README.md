@@ -1,6 +1,8 @@
 # BluehatIL LLS writeup
 A writeup solution for the "Cracking LLS (Locker Layer Security)" challenge in the BluehatIL 2025 conference. **[@Danlif](https://github.com/Danlif1/Danlif1)** and I solved this challenge together a few days after the conference (Was very fun! The conference and the challenge).
 
+This writeup does no go stright to the point but explains the solution and our way of thinking, it also adds a bit of ellipitic curve explanations and hopefully suitable for people with little to no background. If you have any questions feel free to send an issue.
+
 ## Challenge description
 > We’ve installed state-of-the-art cryptography in our faculty lockers. They run on a newly invented “Locker Layer Security” protocol. Best of luck opening them... unless, of course, you're holding the real key (or something better).
 
@@ -37,7 +39,7 @@ An understanding of the ECDH algorithm is important here - you can read in wikip
 
 So, client sends to server his public key - `client_private_key * G (G = an aggreed point from the beggining)` and the server multiplies by `server_private_key` resulting in `client_private_key * server_private_key * G`. Take a moment to understand why the client gets the same expression on his side as well.
 
-Under the new AES layer - the server is signing on the string "LlsServerHello:" and the client verifies. Than the client sends a signature over "LlsClientHello:". If the server 
+Under the new AES layer - the server is signing on the string "LlsServerHello:" and the client verifies. Than the client sends a signature over "LlsClientHello:". If the server successfully validated the signature it sets the client public key as `peerPublicKey`, as mentioned before if the `peerPublicKey` is equal to `publicKey` the door will open. The validation happnes with the `ecdsa` object and is explained in more details later. 
 
 ## Attack ideas
 
@@ -65,4 +67,17 @@ If we give `s = 0` to the expression `new(big.Int).ModInverse(&s, n)` We will ge
 
 If we try to give `s < 0` or `s > n` to the expression, we will get the same values as if `s` was in range.
 
-### 
+### Leaking the key
+After understanding the ECDSA bypass will not work and validating the rest of the implemntation follows the wikipeidia instructitons (like checking that k is generated from a secure random) we went to another part of the program that seems suspicius. We noticed from the beggining that no one validates that the given point is on the curve - there is a function `pointt.go:IsOnCurve` that is never called. But in the ECDSA validation there was nothing to do with that (the point must be the server public key).
+
+Where else can we use this fact? In the key exchange we pass a point!
+
+To understand the exploit this is what you need to know:
+* There is a finite number of points on a curve - all are pairs of whole numbers
+* The number of points on the curve is called N and is easy to calculate
+* G is called the generator - adding G to itself will pass through all the points on the curve untill returning to itself.
+* Since adding two points result in another point on the curve - if the curve order is 2 adding G to itself over and over will result in a loop between two values in this specific curve.
+* If the order of the curve is some number say 1837 * 2, we can choose new_G = G * 1837 and adding new_G to itself will result in the same affect.
+* Last and most tricky one to understand - Given a point on curve X (mod P) and another point on curve Y (mod P) - the operations performed to calculate new points on these curves are the same. It simply will create points on the curve you started at but the math we do is the same.
+
+With this understanding we will leak the first bit of the private key. Let's remember that we multiply the point we give by the private key. If the point is in a curve of order 2 - there are only 2 options for the derived key, the pairity bit of the key will decide which one will it be! The key will be used to encrypt and send the string `"LlsServerHello:<Some signature bytes>"` we will iterate over all the key options (2 options) and will find which one decrypts the beggining correctly. This will give us the last bit of the key.
