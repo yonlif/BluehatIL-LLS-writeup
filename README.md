@@ -68,16 +68,23 @@ If we give `s = 0` to the expression `new(big.Int).ModInverse(&s, n)` We will ge
 If we try to give `s < 0` or `s > n` to the expression, we will get the same values as if `s` was in range.
 
 ### Leaking the key
-After understanding the ECDSA bypass will not work and validating the rest of the implemntation follows the wikipeidia instructitons (like checking that k is generated from a secure random) we went to another part of the program that seems suspicius. We noticed from the beggining that no one validates that the given point is on the curve - there is a function `pointt.go:IsOnCurve` that is never called. But in the ECDSA validation there was nothing to do with that (the point must be the server public key).
+After understanding the ECDSA bypass will not work and validating the rest of the implemntation follows the wikipeidia instructitons (like checking that k is generated from a secure random at signing) we went to another part of the program that seems suspicius. We noticed from the beggining that no one validates that the given point is on the curve - there is a function `pointt.go:IsOnCurve` that is never called. But in the ECDSA validation there was nothing to do with that (the point must be the server public key).
 
 Where else can we use this fact? In the key exchange we pass a point!
 
+![elliptic_key_addititon](https://github.com/user-attachments/assets/f0a475da-ef98-4b56-8eac-1f924c51d06f)
+> Nice illustration of elliptic key addition from [bitcoin stackexchange](https://bitcoin.stackexchange.com/a/38923)
+
 To understand the exploit this is what you need to know:
-* There is a finite number of points on a curve - all are pairs of whole numbers
+* There is a finite number of points on a cryptographic elliptic curve - all are pairs of whole numbers
 * The number of points on the curve is called N and is easy to calculate
 * G is called the generator - adding G to itself will pass through all the points on the curve untill returning to itself.
 * Since adding two points result in another point on the curve - if the curve order is 2 adding G to itself over and over will result in a loop between two values in this specific curve.
 * If the order of the curve is some number say 1837 * 2, we can choose new_G = G * 1837 and adding new_G to itself will result in the same affect.
 * Last and most tricky one to understand - Given a point on curve X (mod P) and another point on curve Y (mod P) - the operations performed to calculate new points on these curves are the same. It simply will create points on the curve you started at but the math we do is the same.
 
-With this understanding we will leak the first bit of the private key. Let's remember that we multiply the point we give by the private key. If the point is in a curve of order 2 - there are only 2 options for the derived key, the pairity bit of the key will decide which one will it be! The key will be used to encrypt and send the string `"LlsServerHello:<Some signature bytes>"` we will iterate over all the key options (2 options) and will find which one decrypts the beggining correctly. This will give us the last bit of the key.
+With this understanding we will leak the last bit of the private key. Let's remember that we multiply the point we give by the private key. If the point is in a curve of order 2 - there are only 2 options for the derived key, the pairity bit of the key will decide which one will it be! The key will be used to encrypt and send the string `"LlsServerHello:<Some signature bytes>"` we will iterate over all the key options (2 options) and will find which one decrypts the beggining correctly. This will give us the last bit of the key.
+
+The last thing we need to do in order to solve is use the [Chinese remainder theorem](https://en.wikipedia.org/wiki/Chinese_remainder_theorem), the intuition for this goes as follows - if for a single value x (private key) we can create equations that leak information on that key on many different modulus we can recreate the original x. For example if `x = 1 mod 2` and `x = 2 mod 3` than x can be 5. The CRT gives us a way to recreate x from these equations, there is a proof but [this margin is too narrow to contain](https://en.wikipedia.org/wiki/Fermat%27s_Last_Theorem#Fermat's_conjecture). So we will generate multiple points of small orders, check what is the reminder of the private key from that order and will create equaitons for the CRT. We will use sage in the implementation to do all the CRT and EC heavy lifting. That will recreate the private key!
+
+Given the private key - winning is trivial, use the given go client and put the private key in the correct environment variable.
