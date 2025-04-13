@@ -1,4 +1,4 @@
-# BluehatIL LLS writeup
+![ECDiffieHellman_diagram](https://github.com/user-attachments/assets/b9f231e0-cd16-41b6-af6e-fd4986873a57)# BluehatIL LLS writeup
 A writeup solution for the "Cracking LLS (Locker Layer Security)" challenge in the BluehatIL 2025 conference. **[@Danlif](https://github.com/Danlif1/Danlif1)** and I solved this challenge together a few days after the conference (Was very fun! The conference and the challenge).
 
 ## Challenge description
@@ -19,7 +19,28 @@ Scanning the QR code, we get "blue-lockers.tar". Inside, there are the following
 
 ### Diving into `lls.go`
 
+```
+// LLS Protocol - elliptic curve Locker Layer Security (SM2)
+// On new connection perform the following handshake:
+// 1. Establish secure channel using ECDH
+// 2. Apply AES-CTR encryption using shared secret
+// 3. Exchange signature blocks for authentication
+// 4. Done! Locker Layer Security connection established
+```
+So this comment gives us the general idea.  
+We start with generating `ecdh` and `ecdsa` objects, `ecdh` will be used for key exchange (1) to create encrypted AES channel, `ecdsa` will be used to verify signature blocks (3).  
+Both the client and the server are sending the public key, multipling it by the private key, applying `sha256` and this is the shared AES key.  
+
+![An-example-of-ECC-version-of-Diffie-Hellman-Protocol](https://github.com/user-attachments/assets/92de61eb-132e-4761-a47f-e53815f33b12)
+
+An understaning of the ECDH algorithm is important here - you can read in wikipedia about the [general idea](https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange) and the [EC variant](https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman). Shortly - an elliptic curve point is a mathematical object that implements the "Addition" operator between two points. Multiplication is defined only point to scalar and is implemented by adding the point to itself many times. Both of these operations create another point on curve. If we multiplied a point by a scalar it should be hard to find the original point (This is the discrete logarithm problem in elliptic curve, many CTFs simply use a curve where for some magic math reasons solving this is easy but in this CTF the curve is SM2 - and is the [Chinese national standard](https://docs.openssl.org/1.1.1/man7/SM2/#name)).
+
+So, client sends to server his public key - `client_private_key * G (G = an aggreed point from the beggining)` and the server multiplies by `server_private_key` resulting in `client_private_key * server_private_key * G`. Take a moment to understand why the client gets the same expression on his side as well.
+
+Under the new AES layer - the server is signing on the string "LlsServerHello:" and the client verifies. Than the client sends a signature over "LlsClientHello:". If the server 
+
 ## Attack ideas
+
 We had a few ideas, Frankly after a few minutes we just dove into the crypto (Also checked for the stupid go bug where you create a variable without `:=`, here is a [liveoverflow](https://www.youtube.com/watch?v=wVknDjTgQoo&ab_channel=LiveOverflow) video about it, he also was at the event!!). Looking back maybe checking the mutexs could have been a good idea. We starting to think - the fact that the ECDH and ECDSA both initialized with the same key was also interesting, but we couldn't exploit anything from it.
 
 ### ECDSA No validation idea
