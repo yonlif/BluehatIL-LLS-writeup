@@ -21,8 +21,8 @@ Scanning the QR code, we get "blue-lockers.tar". Inside, there are the following
 
 ```
 // LLS Protocol - elliptic curve Locker Layer Security (SM2)
-// On new connection perform the following handshake:
-// 1. Establish secure channel using ECDH
+// On new connection, perform the following handshake:
+// 1. Establisha  secure channel using ECDH
 // 2. Apply AES-CTR encryption using shared secret
 // 3. Exchange signature blocks for authentication
 // 4. Done! Locker Layer Security connection established
@@ -33,7 +33,7 @@ Both the client and the server are sending the public key, multipling it by the 
 
 ![An-example-of-ECC-version-of-Diffie-Hellman-Protocol](https://github.com/user-attachments/assets/92de61eb-132e-4761-a47f-e53815f33b12)
 
-An understaning of the ECDH algorithm is important here - you can read in wikipedia about the [general idea](https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange) and the [EC variant](https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman). Shortly - an elliptic curve point is a mathematical object that implements the "Addition" operator between two points. Multiplication is defined only point to scalar and is implemented by adding the point to itself many times. Both of these operations create another point on curve. If we multiplied a point by a scalar it should be hard to find the original point (This is the discrete logarithm problem in elliptic curve, many CTFs simply use a curve where for some magic math reasons solving this is easy but in this CTF the curve is SM2 - and is the [Chinese national standard](https://docs.openssl.org/1.1.1/man7/SM2/#name)).
+An understanding of the ECDH algorithm is important here - you can read in wikipedia about the [general idea](https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange) and the [EC variant](https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman). Shortly - an elliptic curve point is a mathematical object that implements the "Addition" operator between two points. Multiplication is defined only point to scalar and is implemented by adding the point to itself many times. Both of these operations create another point on curve. If we multiplied a point by a scalar it should be hard to find the original point (This is the discrete logarithm problem in elliptic curve, many CTFs simply use a curve where for some magic math reasons solving this is easy but in this CTF the curve is SM2 - and is the [Chinese national standard](https://docs.openssl.org/1.1.1/man7/SM2/#name)).
 
 So, client sends to server his public key - `client_private_key * G (G = an aggreed point from the beggining)` and the server multiplies by `server_private_key` resulting in `client_private_key * server_private_key * G`. Take a moment to understand why the client gets the same expression on his side as well.
 
@@ -41,9 +41,28 @@ Under the new AES layer - the server is signing on the string "LlsServerHello:" 
 
 ## Attack ideas
 
-We had a few ideas, Frankly after a few minutes we just dove into the crypto (Also checked for the stupid go bug where you create a variable without `:=`, here is a [liveoverflow](https://www.youtube.com/watch?v=wVknDjTgQoo&ab_channel=LiveOverflow) video about it, he also was at the event!!). Looking back maybe checking the mutexs could have been a good idea. We starting to think - the fact that the ECDH and ECDSA both initialized with the same key was also interesting, but we couldn't exploit anything from it.
+We had a few ideas, Frankly after a few minutes we just dove into the crypto (Also checked for the stupid go bug where you create a variable without `:=`, Here is a [liveoverflow](https://www.youtube.com/watch?v=wVknDjTgQoo&ab_channel=LiveOverflow) video about it, he also was at the event!!). Looking back maybe checking the mutexs could have been a good idea. We starting to think - the fact that the ECDH and ECDSA both initialized with the same key was also interesting, but we couldn't exploit anything from it.
 
 ### ECDSA No validation idea
 The following idea was cool but did not solve the CTF, you can skip reading if you are here for the solution.  
+The function `Verify` is meant to verify that the signature is correct.
+The function takes 4 variables:
+* `message` - Which is the original message in the signature
+* `publicKey` - This is the public key used (In our case, this is the server's public key)
+* `r` - This is the `nonce` We used for the signature.
+* `s` - This is the resulting signature.
+
+In the [Wikipedia page](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm), we can see that one of the demands is to `Verify that r and s are integers in [1,n−1].`
+Which isn't being done in the code.
+
+If we will pass the value `r = 0`, We can get that the last line of: `if big.NewInt(0).Mod(&r, n).Cmp(&res.x.Int) == 0` actually demands: `res.x.Int == 0`
+
+Looking at how `res` is calculated, we can see that if `s_Inverse` was able to be equal to `0`, then `res` would be equal to `0`
+
+`s_Inverse` is equal to `new(big.Int).ModInverse(&s, n)` as we control `s` we thought that we might be able to find a value `s` such that it would be equal `0` (Or maybe any other unwanted value `<=0`)
+
+If we give `s = 0` to the expression `new(big.Int).ModInverse(&s, n)` We will get `nil` </br> which crashes us in the next line: `u1 := new(big.Int).Mul(z, s_Inverse)` because of `runtime error: invalid memory address or nil pointer dereference`
+
+If we try to give `s < 0` or `s > n` to the expression, we will get the same values as if `s` was in range.
 
 ### 
