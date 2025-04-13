@@ -1,4 +1,4 @@
-![ECDiffieHellman_diagram](https://github.com/user-attachments/assets/b9f231e0-cd16-41b6-af6e-fd4986873a57)# BluehatIL LLS writeup
+# BluehatIL LLS writeup
 A writeup solution for the "Cracking LLS (Locker Layer Security)" challenge in the BluehatIL 2025 conference. **[@Danlif](https://github.com/Danlif1/Danlif1)** and I solved this challenge together a few days after the conference (Was very fun! The conference and the challenge).
 
 ## Challenge description
