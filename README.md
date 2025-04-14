@@ -7,7 +7,7 @@ This writeup does not go straight to the point but explains the solution and our
 > We’ve installed state-of-the-art cryptography in our faculty lockers. They run on a newly invented “Locker Layer Security” protocol. Best of luck opening them... unless, of course, you're holding the real key (or something better).
 
 ## TL;DR
-The challenge requires an understanding of [elliptic curves cryptography](https://en.wikipedia.org/wiki/Elliptic_curve). We review some ideas for the solution and then use the fact that the code does [not verify that a point is on the curve](https://github.com/elikaski/ECC_Attacks?tab=readme-ov-file#Not-verifying-that-a-point-is-on-the-curve). To solve the challenge yourself, you will need sage, go ahead and [install](https://doc.sagemath.org/html/en/installation/index.html) it now since it is about 1GB...
+The challenge requires an understanding of [elliptic curves cryptography](https://en.wikipedia.org/wiki/Elliptic_curve). We review some ideas for the solution and then use the fact that the code does [not verify that a point is on the curve](https://github.com/elikaski/ECC_Attacks?tab=readme-ov-file#Not-verifying-that-a-point-is-on-the-curve). To solve the challenge yourself, you will need SageMath, an open-source mathematics software. Go ahead and [install](https://doc.sagemath.org/html/en/installation/index.html) it now since it is about 1GB...
 
 ## Starting the challenge
 
@@ -16,7 +16,7 @@ Scanning the QR code, we get "blue-lockers.tar". Inside, there are the following
 * `sm2.go` - Implementation of cryptography on elliptic curves, ECHD, and such. Also, the EC parameters the code uses.
 * `galois_field.go` - Literally opened this file only twice - Some math related to EC implementing a finite field.
 * `lls.go` - The most interesting file - contains a handshake - encryption and authentication client and server.
-* `server/main.go` - The server that is running in the event - getting a private key from the environment variable, listening on port `8080` and has 2 endpoints - `info` and `open`. Both endpoints actually start with a handshake happening under the hood using the LLS Listener. The `info` function returns the public key of the server and the client and open checks if the public key of the client and the server is the same and if so - opens the locker. The catch? If you pass the public key of the server you will not know the private key (since we didn't choose it) and will not be able to pass authentication.
+* `server/main.go` - The server that is running in the event - getting a private key from the environment variable, listening on port `8080` and has 2 endpoints - `info` and `open`. Both endpoints actually start with a handshake happening under the hood using the LLS Listener. The `info` function returns the public key of the server and the client and `open` checks if the public key of the client and the server is the same and if so - opens the locker. The catch? If you pass the public key of the server you will not know the private key (since we didn't choose it) and will not be able to pass authentication.
 * `client/main.go` - Not very interesting, using `lls.go` to communicate with the server.
 
 ### Diving into `lls.go`
@@ -30,7 +30,7 @@ Scanning the QR code, we get "blue-lockers.tar". Inside, there are the following
 // 4. Done! Locker Layer Security connection established
 ```
 So this comment gives us a general idea.  
-We start with generating `ecdh` and `ecdsa` objects, `ecdh` will be used for key exchange (1) to create an encrypted AES channel, `ecdsa` will be used to verify signature blocks (3).  
+We start with generating `ecdh` and `ecdsa` objects, `ecdh` will be used for key exchange (stage 1 from the comment above) to create an encrypted AES channel, `ecdsa` will be used to verify signature blocks (stage 3).  
 Both the client and the server are sending the public key, multiplying it by the private key, and applying `sha256`, and this is the shared AES key.  
 
 ![An-example-of-ECC-version-of-Diffie-Hellman-Protocol](https://github.com/user-attachments/assets/92de61eb-132e-4761-a47f-e53815f33b12)
@@ -78,7 +78,7 @@ Where else can we use this fact? In the key exchange, we pass a point!
 > Nice illustration of elliptic key addition from [bitcoin stackexchange](https://bitcoin.stackexchange.com/a/38923)
 
 To understand the exploit, this is what you need to know:
-* There is a finite number of points on a cryptographic elliptic curve - all are pairs of whole numbers
+* There is a finite number of points on a cryptographic elliptic curve - all are pairs X,Y of integers
 * The number of points on the curve is called N and is easy to calculate
 * G is called the generator - adding G to itself will pass through all the points on the curve untill returning to itself.
 * Since adding two points results in another point on the curve - if the curve order is 2, adding G to itself over and over will result in a loop between two values in this specific curve.
